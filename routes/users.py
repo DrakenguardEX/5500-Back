@@ -1,12 +1,10 @@
-from flask import Blueprint, request, jsonify, current_app
-from bson import ObjectId
+from flask import Blueprint, request, jsonify
+from models.user import User
 
 users_bp = Blueprint('users', __name__)
 
-# User registration route
 @users_bp.route('/register', methods=['POST'])
 def register():
-    db = current_app.config['DB']
     data = request.json
     username = data.get('username')
     password = data.get('password')
@@ -14,44 +12,45 @@ def register():
     if not username or not password:
         return jsonify({"success": False, "message": "Username and password required."}), 400
 
-    # Check if username already exists
-    existing_user = db['users'].find_one({"username": username})
-    if existing_user:
+    if User.objects(username=username).first():
         return jsonify({"success": False, "message": "Username already exists."}), 409
 
-    # Insert new user into MongoDB
-    user = {
-        "username": username,
-        "password": password  # Plaintext password
-    }
-    result = db['users'].insert_one(user)
+    user = User(username=username, password=password)
+    user.save()
 
-    return jsonify({"success": True, "message": "User registered successfully.", "user_id": str(result.inserted_id)}), 201
+    return jsonify({
+        "success": True,
+        "message": "User registered successfully.",
+        "user_id": str(user.id)
+    }), 201
 
-# User login route
 @users_bp.route('/login', methods=['POST'])
 def login():
-    db = current_app.config['DB']  # Access MongoDB database from app config
     data = request.json
     username = data.get('username')
     password = data.get('password')
 
-    if not username or not password:
-        return jsonify({"success": False, "message": "Username and password required."}), 400
-
-    # Find user in MongoDB
-    user = db['users'].find_one({"username": username})
-
-    if user and user.get('password') == password:
-        # If user exists and password matches, return success
+    user = User.objects(username=username).first()
+    if user and user.password == password:
         return jsonify({
             "success": True,
-            "token": f"fake-token-for-{username}",  # Optional: implement real JWT token later
+            "token": f"fake-token-for-{username}",
+            "user_id": str(user.id),
             "message": "Login successful"
         }), 200
-    else:
-        # If user not found or password doesn't match
-        return jsonify({
-            "success": False,
-            "message": "Invalid username or password"
-        }), 401
+
+    return jsonify({"success": False, "message": "Invalid username or password"}), 401
+
+
+@users_bp.route('/<string:user_id>', methods=['GET'])
+def get_user(user_id):
+    user = User.objects(id=user_id).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    return jsonify({
+        "_id": str(user.id),
+        "username": user.username,
+        "teams": [str(t.id) for t in user.teams],
+        "personal_tasks": [str(t.id) for t in user.personal_tasks]
+    })

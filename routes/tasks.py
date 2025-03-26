@@ -1,42 +1,102 @@
 from flask import Blueprint, request, jsonify
+from models.task import Task
+from models.team import Team
+from models.user import User
 
 tasks_bp = Blueprint('tasks', __name__)
 
-# Mock database (临时数据)
-tasks_db = [
-    {"id": 1, "title": "Task 1", "description": "Description 1"},
-    {"id": 2, "title": "Task 2", "description": "Description 2"}
-]
 
-# 获取所有任务
 @tasks_bp.route('/', methods=['GET'])
 def get_tasks():
-    return jsonify(tasks_db)
+    tasks = Task.objects()
+    result = [{
+        "id": str(task.id),
+        "title": task.title,
+        "description": task.description,
+        "team_id": str(task.team.id) if task.team else None
+    } for task in tasks]
+    return jsonify(result), 200
 
-# 获取单个任务详情
-@tasks_bp.route('/<int:task_id>', methods=['GET'])
+
+@tasks_bp.route('/<string:task_id>', methods=['GET'])
 def get_task(task_id):
-    task = next((task for task in tasks_db if task["id"] == task_id), None)
-    if task:
-        return jsonify(task), 200
-    else:
+    task = Task.objects(id=task_id).first()
+    if not task:
         return jsonify({"message": "Task not found"}), 404
+    return jsonify({
+        "id": str(task.id),
+        "title": task.title,
+        "description": task.description,
+        "team_id": str(task.team.id) if task.team else None
+    }), 200
 
-# 更新任务（标题和描述）
-@tasks_bp.route('/<int:task_id>', methods=['PUT'])
+
+@tasks_bp.route('/<string:task_id>', methods=['PUT'])
 def update_task(task_id):
-    data = request.json
-    task = next((task for task in tasks_db if task["id"] == task_id), None)
-    if task:
-        task["title"] = data.get("title", task["title"])  # 如果有 title 就更新
-        task["description"] = data.get("description", task["description"])  # 如果有 description 就更新
-        return jsonify({"message": "Task updated", "task": task}), 200
-    else:
+    task = Task.objects(id=task_id).first()
+    if not task:
         return jsonify({"message": "Task not found"}), 404
 
-# 删除任务
-@tasks_bp.route('/<int:task_id>', methods=['DELETE'])
+    data = request.json
+    task.title = data.get("title", task.title)
+    task.description = data.get("description", task.description)
+    task.save()
+
+    return jsonify({"message": "Task updated", "task": {
+        "id": str(task.id),
+        "title": task.title,
+        "description": task.description
+    }}), 200
+
+
+@tasks_bp.route('/<string:task_id>', methods=['DELETE'])
 def delete_task(task_id):
-    global tasks_db
-    tasks_db = [task for task in tasks_db if task["id"] != task_id]
+    task = Task.objects(id=task_id).first()
+    if not task:
+        return jsonify({"message": "Task not found"}), 404
+
+    task.delete()
     return jsonify({"message": "Task deleted"}), 200
+
+@tasks_bp.route('/user/<string:user_id>', methods=['POST'])
+def add_user_task(user_id):
+    try:
+        data = request.json
+        title = data.get("title")
+        description = data.get("description", "")
+
+        user = User.objects(id=user_id).first()
+        if not user:
+            print("❌ User not found:", user_id)
+            return jsonify({"message": "User not found"}), 404
+
+        task = Task(title=title, description=description, owner=user)
+        task.save()
+
+        user.personal_tasks.append(task)
+        user.save()
+
+        return jsonify({
+            "id": str(task.id),
+            "title": task.title,
+            "description": task.description
+        }), 201
+
+    except Exception as e:
+        print("🔥 Error creating personal task:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@tasks_bp.route('/user/<string:user_id>', methods=['GET'])
+def get_user_tasks(user_id):
+    user = User.objects(id=user_id).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    return jsonify([
+        {
+            "id": str(task.id),
+            "title": task.title,
+            "description": task.description
+        } for task in user.personal_tasks
+    ])

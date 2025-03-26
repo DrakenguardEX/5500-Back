@@ -1,89 +1,117 @@
-from flask import Blueprint, request, jsonify, current_app
-from bson import ObjectId
-import uuid  # for generating unique task IDs
+from flask import Blueprint, request, jsonify
+from models.team import Team
+from models.task import Task
+from models.user import User
 
 teams_bp = Blueprint('teams', __name__)
 
-# Get all teams with their tasks
+# Get all teams for the current user
 @teams_bp.route('/', methods=['GET'])
 def get_teams():
-    db = current_app.config['DB']
-    teams = []
-    for team in db['teams'].find():
-        team['_id'] = str(team['_id'])
-        for task in team.get('tasks', []):
-            task['id'] = str(task['id'])
-        teams.append(team)
-    return jsonify(teams), 200
+    user_id = request.headers.get("X-User-Id")
+    if not user_id:
+        return jsonify({"message": "Missing user ID"}), 400
 
-# Create a new team
+    user = User.objects(id=user_id).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    teams = Team.objects(members=user)
+    result = []
+    for team in teams:
+        result.append({
+            "_id": str(team.id),
+            "name": team.name,
+            "tasks": [{
+                "id": str(task.id),
+                "title": task.title,
+                "description": task.description
+            } for task in team.tasks]
+        })
+    return jsonify(result), 200
+
+# Create new team and add current user as member
 @teams_bp.route('/', methods=['POST'])
 def create_team():
-    db = current_app.config['DB']
     data = request.json
-    if 'name' not in data:
-        return jsonify({"message": "Team name is required"}), 400
-    team = {
-        "name": data['name'],
-        "tasks": []
-    }
-    result = db['teams'].insert_one(team)
-    team['_id'] = str(result.inserted_id)
-    return jsonify({"message": "Team created", "team": team}), 201
+    name = data.get("name")
+    user_id = request.headers.get("X-User-Id")
 
-# Add a new task to a team
+    if not name or not user_id:
+        return jsonify({"message": "Team name and User ID required"}), 400
+
+    user = User.objects(id=user_id).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    team = Team(name=name, members=[user], tasks=[])
+    team.save()
+
+    return jsonify({
+        "message": "Team created",
+        "team": {
+            "_id": str(team.id),
+            "name": team.name,
+            "members": [{"_id": str(user.id), "username": user.username}],
+            "tasks": []
+        }
+    }), 201
+
+# Add task to a team
 @teams_bp.route('/<string:team_id>/tasks', methods=['POST'])
 def add_task_to_team(team_id):
-    db = current_app.config['DB']
     data = request.json
-    if 'title' not in data:
-        return jsonify({"message": "Task title is required"}), 400
+    title = data.get("title")
+    description = data.get("description", "")
 
-    task = {
-        "id": str(ObjectId()),  # generate a unique id
-        "title": data['title'],
-        "description": data.get('description', '')
-    }
-
-    result = db['teams'].update_one(
-        {'_id': ObjectId(team_id)},
-        {'$push': {'tasks': task}}
-    )
-
-    if result.matched_count == 0:
+    team = Team.objects(id=team_id).first()
+    if not team:
         return jsonify({"message": "Team not found"}), 404
 
-    return jsonify({"message": "Task added", "task": task}), 201
+    task = Task(title=title, description=description, team=team)
+    task.save()
+    team.tasks.append(task)
+    team.save()
 
-# Update a task inside a team
-@teams_bp.route('/<string:team_id>/tasks/<string:task_id>', methods=['PUT'])
-def update_task_in_team(team_id, task_id):
-    db = current_app.config['DB']
+    return jsonify({
+        "message": "Task added",
+        "task": {
+            "id": str(task.id),
+            "title": task.title,
+            "description": task.description
+        }
+    }), 201
+
+@teams_bp.route('/<string:team_id>/members', methods=['POST'])
+def add_member_to_team(team_id):
     data = request.json
+    username_to_add = data.get("username")
 
-    result = db['teams'].update_one(
-        {'_id': ObjectId(team_id), 'tasks.id': task_id},
-        {'$set': {
-            'tasks.$.title': data.get('title'),
-            'tasks.$.description': data.get('description')
-        }}
-    )
+    if not username_to_add:
+        return jsonify({"message": "Username is required"}), 400
 
-    if result.matched_count == 0:
-        return jsonify({"message": "Task or Team not found"}), 404
+    user = User.objects(username=username_to_add).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
 
-    return jsonify({"message": "Task updated"}), 200
-
-# Delete a task from a team
-@teams_bp.route('/<string:team_id>/tasks/<string:task_id>', methods=['DELETE'])
-def delete_task_from_team(team_id, task_id):
-    db = current_app.config['DB']
-    result = db['teams'].update_one(
-        {'_id': ObjectId(team_id)},
-        {'$pull': {'tasks': {'id': task_id}}}
-    )
-
-    if result.matched_count == 0:
+    team = Team.objects(id=team_id).first()
+    if not team:
         return jsonify({"message": "Team not found"}), 404
 
-    return jsonify({"message": "Task deleted"}), 200
+    if user in team.members:
+        return jsonify({"message": "User already a member"}), 409
+
+    team.members.append(user)
+    team.save()
+
+    user.teams.append(team)
+    user.save()
+
+    return jsonify({
+        "message": "User added to team",
+        "user": {
+            "_id": str(user.id),
+            "username": user.username
+        }
+    }), 200
+
