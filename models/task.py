@@ -6,5 +6,10 @@ class Task(Document):
     description = StringField(default="")
     team = ReferenceField('Team', null=True)
     owner = ReferenceField('User', null=True)
+    
+
+    tasktype = StringField(default="")
+    status = StringField(default="")
+    priority = StringField(default="")
 
 meta = {'collection': 'tasks'}
