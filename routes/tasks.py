@@ -40,12 +40,20 @@ def update_task(task_id):
     data = request.json
     task.title = data.get("title", task.title)
     task.description = data.get("description", task.description)
+    task.type = data.get("type", task.type)
+    task.status = data.get("status", task.status)
+    task.priority = data.get("priority", task.priority)
+    
     task.save()
 
     return jsonify({"message": "Task updated", "task": {
         "id": str(task.id),
         "title": task.title,
-        "description": task.description
+        "description": task.description,
+        "type": task.type,
+        "status": task.status,
+        "priority": task.priority
+        
     }}), 200
 
 
@@ -64,13 +72,23 @@ def add_user_task(user_id):
         data = request.json
         title = data.get("title")
         description = data.get("description", "")
+        
+        task_type = "TBD"
+        status = "TBD"
+        priority = "TBD"
 
         user = User.objects(id=user_id).first()
         if not user:
             print("❌ User not found:", user_id)
             return jsonify({"message": "User not found"}), 404
 
-        task = Task(title=title, description=description, owner=user)
+        task = Task(
+            title=title, 
+            description=description,
+            type = task_type,
+            status = status,
+            priority = priority,
+            owner=user)
         task.save()
 
         user.personal_tasks.append(task)
@@ -79,7 +97,10 @@ def add_user_task(user_id):
         return jsonify({
             "id": str(task.id),
             "title": task.title,
-            "description": task.description
+            "description": task.description,
+            "type": task.type,
+            "status": task.status,
+            "priority": task.priority
         }), 201
 
     except Exception as e:
@@ -97,6 +118,9 @@ def get_user_tasks(user_id):
         {
             "id": str(task.id),
             "title": task.title,
-            "description": task.description
+            "description": task.description,
+            "type": task.type,
+            "status": task.status,
+            "priority": task.priority
         } for task in user.personal_tasks
     ])
