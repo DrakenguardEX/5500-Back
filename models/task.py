@@ -7,4 +7,8 @@ class Task(Document):
     team = ReferenceField('Team', null=True)
     owner = ReferenceField('User', null=True)
 
+    status = StringField()
+    type = StringField()
+    priority = StringField()
+
 meta = {'collection': 'tasks'}
