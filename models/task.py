@@ -11,4 +11,4 @@ class Task(Document):
     type = StringField()
     priority = StringField()
 
-meta = {'collection': 'tasks'}
+    meta = {'collection': 'tasks'}
