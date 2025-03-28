@@ -8,7 +8,7 @@ class Task(Document):
     owner = ReferenceField('User', null=True)
     
 
-    tasktype = StringField(default="")
+    type = StringField(default="")
     status = StringField(default="")
     priority = StringField(default="")
 
