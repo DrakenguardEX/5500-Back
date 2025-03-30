@@ -44,6 +44,9 @@ def update_task(task_id):
     task.status = data.get("status", task.status)
     task.priority = data.get("priority", task.priority)
     
+    task.cycle = data.get("cycle", task.cycle)             
+    task.dueDate = data.get("dueDate", task.dueDate)       
+    
     task.save()
 
     return jsonify({"message": "Task updated", "task": {
@@ -52,7 +55,9 @@ def update_task(task_id):
         "description": task.description,
         "type": task.type,
         "status": task.status,
-        "priority": task.priority
+        "priority": task.priority,
+        "cycle": task.cycle,                                
+        "dueDate": str(task.dueDate) if task.dueDate else None  
         
     }}), 200
 
@@ -73,9 +78,20 @@ def add_user_task(user_id):
         title = data.get("title")
         description = data.get("description", "")
         
-        task_type = "TBD"
-        status = "TBD"
-        priority = "TBD"
+        task_type = data.get("type", "TBD")
+        status = data.get("status", "TBD")
+        priority = data.get("priority", "TBD")
+        cycle = data.get("cycle", "TBD")
+
+        
+        from datetime import datetime
+        due_date_str = data.get("dueDate")
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
+            except ValueError:
+                print("⚠️ Invalid dueDate format:", due_date_str)
 
         user = User.objects(id=user_id).first()
         if not user:
@@ -85,11 +101,15 @@ def add_user_task(user_id):
         task = Task(
             title=title, 
             description=description,
-            type = task_type,
-            status = status,
-            priority = priority,
-            owner=user)
+            type=task_type,
+            status=status,
+            priority=priority,
+            cycle=cycle,
+            dueDate=due_date,   
+            owner=user
+        )
         task.save()
+        print("✅ Task saved:", task.id)
 
         user.personal_tasks.append(task)
         user.save()
@@ -100,12 +120,15 @@ def add_user_task(user_id):
             "description": task.description,
             "type": task.type,
             "status": task.status,
-            "priority": task.priority
+            "priority": task.priority,
+            "cycle": task.cycle,
+            "dueDate": str(task.dueDate) if task.dueDate else None
         }), 201
 
     except Exception as e:
         print("🔥 Error creating personal task:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 @tasks_bp.route('/user/<string:user_id>', methods=['GET'])
@@ -114,13 +137,19 @@ def get_user_tasks(user_id):
     if not user:
         return jsonify({"message": "User not found"}), 404
 
-    return jsonify([
-        {
-            "id": str(task.id),
-            "title": task.title,
-            "description": task.description,
-            "type": task.type,
-            "status": task.status,
-            "priority": task.priority
-        } for task in user.personal_tasks
-    ])
+    result = []
+    for task_ref in user.personal_tasks:
+        task = Task.objects(id=task_ref.id).first()  
+        if task:
+            result.append({
+                "id": str(task.id),
+                "title": task.title,
+                "description": task.description,
+                "type": task.type,
+                "status": task.status,
+                "priority": task.priority,
+                "cycle": task.cycle,        
+                "dueDate": task.dueDate     
+            })
+
+    return jsonify(result), 200
