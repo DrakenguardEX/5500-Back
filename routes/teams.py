@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from models.team import Team
 from models.task import Task
 from models.user import User
+from datetime import datetime
 
 teams_bp = Blueprint('teams', __name__)
 
@@ -25,7 +26,9 @@ def get_teams():
             "tasks": [{
                 "id": str(task.id),
                 "title": task.title,
-                "description": task.description
+                "description": task.description,
+                "status": task.status,
+                "dueDate": str(task.dueDate) if task.dueDate else None
             } for task in team.tasks]
         })
     return jsonify(result), 200
@@ -63,12 +66,14 @@ def add_task_to_team(team_id):
     data = request.json
     title = data.get("title")
     description = data.get("description", "")
+    status = data.get("status", "")
+    due_date = data.get("dueDate")
 
     team = Team.objects(id=team_id).first()
     if not team:
         return jsonify({"message": "Team not found"}), 404
 
-    task = Task(title=title, description=description, team=team)
+    task = Task(title=title, description=description, status=status, dueDate=due_date, team=team)
     task.save()
     team.tasks.append(task)
     team.save()
@@ -78,9 +83,55 @@ def add_task_to_team(team_id):
         "task": {
             "id": str(task.id),
             "title": task.title,
-            "description": task.description
+            "description": task.description,
+            "status": task.status,
+            "dueDate": str(task.dueDate) if task.dueDate else None
         }
     }), 201
+
+@teams_bp.route('/<string:team_id>/tasks/<string:task_id>', methods=['PUT'])
+def update_team_task(team_id, task_id):
+    data = request.json
+
+    team = Team.objects(id=team_id).first()
+    if not team:
+        return jsonify({"message": "Team not found"}), 404
+
+    task = Task.objects(id=task_id, team=team).first()
+    if not task:
+        return jsonify({"message": "Task not found in this team"}), 404
+
+    # Update fields directly like in tasks.py
+    task.title = data.get("title", task.title)
+    task.description = data.get("description", task.description)
+    task.status = data.get("status", task.status)
+    task.priority = data.get("priority", task.priority)
+    task.type = data.get("type", task.type)
+    task.cycle = data.get("cycle", task.cycle)
+    
+    # Handle dueDate separately for proper date formatting
+    due_date_str = data.get("dueDate")
+    if due_date_str:
+        try:
+            task.dueDate = datetime.strptime(due_date_str, "%Y-%m-%d")
+        except ValueError:
+            print("⚠️ Invalid dueDate format:", due_date_str)
+
+    task.save()
+
+    return jsonify({
+        "message": "Task updated",
+        "task": {
+            "id": str(task.id),
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "priority": task.priority,
+            "type": task.type,
+            "cycle": task.cycle,
+            "dueDate": str(task.dueDate) if task.dueDate else None
+        }
+    }), 200
 
 @teams_bp.route('/<string:team_id>/members', methods=['POST'])
 def add_member_to_team(team_id):
@@ -114,4 +165,3 @@ def add_member_to_team(team_id):
             "username": user.username
         }
     }), 200
-

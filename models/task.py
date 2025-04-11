@@ -2,7 +2,6 @@ from mongoengine import Document, StringField, ReferenceField, DateField
 
 class Task(Document):
     title = StringField(required=True)
-    simple_description = StringField(default="")
     description = StringField(default="")
     team = ReferenceField('Team', null=True)
     owner = ReferenceField('User', null=True)
