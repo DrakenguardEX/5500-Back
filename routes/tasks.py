@@ -33,7 +33,12 @@ def get_task(task_id):
     return jsonify({
         "id": str(task.id),
         "title": task.title,
-        "description": task.description
+        "description": task.description,
+        "status": task.status,
+        "type": task.type,
+        "priority": task.priority,
+        "cycle": task.cycle,
+        "dueDate": str(task.dueDate) if task.dueDate else None
     }), 200
 
 
