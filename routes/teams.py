@@ -72,6 +72,12 @@ def add_task_to_team(team_id):
     team = Team.objects(id=team_id).first()
     if not team:
         return jsonify({"message": "Team not found"}), 404
+    
+    # Check for duplicate title in the team's tasks
+    for task in team.tasks:
+        if task.title.strip().lower() == title.strip().lower():
+            return jsonify({"message": "Task with this title already exists"}), 409
+
 
     task = Task(title=title, description=description, status=status, dueDate=due_date, team=team)
     task.save()
@@ -132,6 +138,24 @@ def update_team_task(team_id, task_id):
             "dueDate": str(task.dueDate) if task.dueDate else None
         }
     }), 200
+
+@teams_bp.route('/<string:team_id>/tasks/<string:task_id>', methods=['DELETE'])
+def delete_team_task(team_id, task_id):
+    team = Team.objects(id=team_id).first()
+    if not team:
+        return jsonify({"message": "Team not found"}), 404
+
+    task = Task.objects(id=task_id, team=team).first()
+    if not task:
+        return jsonify({"message": "Task not found in this team"}), 404
+
+    # Remove task from team's task list and delete it
+    team.tasks = [t for t in team.tasks if t.id != task.id]
+    team.save()
+    task.delete()
+
+    return jsonify({"message": "Task deleted"}), 200
+
 
 @teams_bp.route('/<string:team_id>/members', methods=['POST'])
 def add_member_to_team(team_id):
