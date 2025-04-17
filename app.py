@@ -37,7 +37,7 @@ def create_app(test_config=None):
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(teams_bp, url_prefix='/api/teams')
     app.register_blueprint(tasks_bp, url_prefix='/api/tasks')
-    app.register_blueprint(ai_assistant_bp, url_prefix='/api/ai-assistant')
+    app.register_blueprint(ai_assistant_bp, url_prefix='/api/ai')
 
     return app
 
