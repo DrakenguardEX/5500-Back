@@ -54,3 +54,11 @@ def get_user(user_id):
         "teams": [str(t.id) for t in user.teams],
         "personal_tasks": [str(t.id) for t in user.personal_tasks]
     })
+
+@users_bp.route('/logout', methods=['POST'])
+def logout():
+    # Placeholder logout logic, since token/session not implemented
+    return jsonify({
+        "success": True,
+        "message": "User logged out successfully."
+    }), 200
